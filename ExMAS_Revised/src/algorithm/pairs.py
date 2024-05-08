@@ -1,8 +1,10 @@
 """ Part of algorithm, where one calculates feasible pairs """
+import itertools
 
 import pandas as pd
 from logging import Logger
 import math
+from itertools import product
 
 from utilities.general_utils import optional_log
 from algorithm.miscellaneous import pairs_calculation_ride
@@ -15,12 +17,12 @@ def pair_pool(
         logger: Logger | None
 ):
     """ Calculate pooling combinations of degree two """
-    sizes = {'initial': math.pow(len(requests), 2)}
+    sizes = {'initial': 4 * math.pow(len(requests), 2)}
     sizes['current'] = sizes['initial']
     sizes['prev_step'] = sizes['initial']
 
     optional_log(10, "Calculating values for pairs ...", logger)
-    out = pd.DataFrame(index=pd.MultiIndex.from_product(requests['traveller_id'] * 2))
+    out = pd.DataFrame(index=pd.MultiIndex.from_product([requests['traveller_id']] * 2))
     cols = pairs_calculation_ride()
     for num, ij in enumerate(['_i', '_j']):
         out[[c + ij for c in cols]] = requests.loc[[requests[c] for c in cols]]
@@ -38,21 +40,44 @@ def pair_pool(
     # If user provides a planning horizon, conduct corresponding filtering
     if params.get('horizon', 0) > 0:
         out = out[abs(out['t_since_t0_i'] - out['t_since_t0_j']) < params['horizon']]
-        sizes['current'] = len(out)
+        sizes['current'] = 4 * len(out)
         optional_log(20, f"Horizon criterion removed "
                          f"{sizes['current'] - sizes['prev_step']}",
                      logger)
-        sizes['prev_step'] = len(out)
-
-    out['t_oo'] = out.apply(lambda x: skim.loc[x['origin_i'], x['origin_j']], axis=1)
-    out['t_ij'] = out.apply(lambda x: skim.loc[x['origin_j'], x['destination_i']], axis=1)
-    out['t_ji'] = out.apply(lambda x: skim.loc[x['origin_i'], x['destination_j']], axis=1)
-    out['t_dd'] = out.apply(lambda x: skim.loc[x['destination_i'], x['destination_j']], axis=1)
+        sizes['prev_step'] = 4 * len(out)
 
     # Query based on travellers' acceptable time windows
     query_prompt = '(t_req_int_j + max_delay_j >= t_req_int_i - max_delay_i) &' \
                    ' (t_req_int_j - max_delay_j <= (t_req_int_i + t_ns_i + max_delay_i))'
     out = out.query(query_prompt)
+
+    # Calculate and filter for origin compatibility
+    out['t_oo'] = out.apply(lambda x: skim.loc[x['origin_i'], x['origin_j']], axis=1)
+    out['delay'] = out['t_req_int_i'] + out['t_oo'] + out['t_req_int_j']
+    out['delay_i'] = out.apply(
+        lambda x: min(abs(x['delay'] / 2), x['max_delay_i'], x['max_delay_i']) *
+                  (1 if x['delay'] < 0 else -1),
+        axis=1
+    )
+
+    for ij in ['i', 'j']:
+        out = out[abs(out['delay_' + ij]) <= out['delta_' + ij] / params['delay_value']]
+
+    sizes['current'] = 4 * len(out)
+    optional_log(20, f"Origin compatibility filtered from {sizes['prev_step']}"
+                     f"to {sizes['current']}.", logger)
+    sizes['prev_step'] = sizes['current']
+
+    # Compute trip characteristics
+    out['t_ij'] = out.apply(lambda x: skim.loc[x['origin_j'], x['destination_i']], axis=1)
+    out['t_ji'] = out.apply(lambda x: skim.loc[x['origin_i'], x['destination_j']], axis=1)
+    out['t_dd'] = out.apply(lambda x: skim.loc[x['destination_i'], x['destination_j']], axis=1)
+
+    for ij, fifo_lifo in product(['i', 'j'], ['fifo', 'lifo']):
+
+
+
+
 
 
 def utility_shared(
@@ -60,5 +85,4 @@ def utility_shared(
         fifo_lifo: str,
         params: dict
 ):
-    ride_row
-
+    ride_row = 0
