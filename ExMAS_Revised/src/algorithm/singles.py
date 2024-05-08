@@ -1,6 +1,6 @@
 import pandas as pd
 
-from ExMAS_Revised.algorithm.pooltype import PoolType
+from algorithm.pooltype import PoolType
 
 
 def single_rides(

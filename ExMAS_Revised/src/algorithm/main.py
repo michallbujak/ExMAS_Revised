@@ -3,17 +3,17 @@ from logging import Logger
 
 import pandas as pd
 
-from .miscellaneous import maximum_delay, ride_columns
-from .singles import single_rides
-from ..utilities.general_utils import optional_log
+from algorithm.miscellaneous import maximum_delay, ride_output_columns
+from algorithm.singles import single_rides
+from utilities.general_utils import optional_log
 
 
 def exmas_main(
-        requests: pd.Dataframe,
+        requests: pd.DataFrame,
         skim_matrix: pd.DataFrame,
         parameters: dict,
-        travellers_characteristics: dict or None = None,
-        logger: Logger or None = None
+        travellers_characteristics: dict | None = None,
+        logger: Logger | None = None
 ):
     """
     The main function of the ExMAS algorithm
@@ -22,7 +22,7 @@ def exmas_main(
     optionally it can include passenger id for identification purposes;
     the key word is "traveller_id".
     :param skim_matrix: matrix with distances between nodes
-    :param parameters: parameters required in the process
+    :param parameters: params required in the process
     those include: speed, price, share_discount, horizon
     :param travellers_characteristics: dictionary with individual
     traits of travellers. Passed optionally. If passed, the passenger
@@ -39,7 +39,7 @@ def exmas_main(
     if travellers_characteristics is not None:
         assert 'traveller_id' in requests.columns, "You need to specify 'traveller_id'"
         assert any(t in travellers_characteristics.columns for t in individual_characteristics), \
-            "The two admissible traveller parameters, i.e. 'VoT' and 'WtS' are missing"
+            "The two admissible traveller params, i.e. 'VoT' and 'WtS' are missing"
 
         requests = pd.merge(requests, travellers_characteristics, on="traveller_id")
 
@@ -61,11 +61,11 @@ def exmas_main(
         lambda x: skim_matrix.loc[x['origin'], x['destination']],
         axis=1
     )
-    requests['t_since_t0'] = requests.apply(
+    requests['t_req_int'] = requests.apply(
         lambda x: x['request_time'] - min(requests['request_time']),
         axis=1
     )
-    requests.sort_values('t_since_t0', inplace=True)
+    requests.sort_values('t_req_int', inplace=True)
 
     # Compute basic characteristics for the private rides
     requests['t_ns'] = requests['distance'].apply(lambda x: int(x / parameters["speed"]))
@@ -86,7 +86,7 @@ def exmas_main(
 
     # Initialise a shareability graph (dataframe with feasible rides)
     feasible_rides = pd.DataFrame(
-        columns=ride_columns()
+        columns=ride_output_columns()
     )
 
     # Start with single rides
@@ -101,3 +101,4 @@ def exmas_main(
 
 
     return feasible_rides
+

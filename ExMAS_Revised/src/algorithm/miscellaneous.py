@@ -12,7 +12,13 @@ def maximum_delay(
                      requests.dist / 1000) / (requests.VoT * requests.WtS)))
 
 
-def ride_columns():
+def ride_output_columns():
     return ['ids', 'u_traveller_total', 'u_traveller_individual',
             'veh_distance', 'kind', 't_travel', 'delays',
             'origin_order', 'destination_order']
+
+
+def pairs_calculation_ride():
+    return ['origin', 'destination', 't_travel', 't_req_int',
+            'distance', 'VoT', 'WtS', 'max_delay']
+
