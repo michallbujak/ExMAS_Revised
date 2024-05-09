@@ -6,9 +6,10 @@ import pandas as pd
 from algorithm.miscellaneous import maximum_delay, ride_output_columns
 from algorithm.singles import single_rides
 from utilities.general_utils import optional_log
+from algorithm.pairs import pair_pool
 
 
-def exmas_main(
+def attractive_rides(
         requests: pd.DataFrame,
         skim_matrix: pd.DataFrame,
         parameters: dict,
@@ -98,6 +99,15 @@ def exmas_main(
     optional_log(20, "Single rides computed", logger)
 
     # Proceed to rides of degree 2
+    feasible_rides = pd.concat(
+        [feasible_rides,
+         pair_pool(
+             requests=requests,
+             params=parameters,
+             skim_matrix=skim_matrix,
+             logger=logger
+         )]
+    )
 
 
     return feasible_rides

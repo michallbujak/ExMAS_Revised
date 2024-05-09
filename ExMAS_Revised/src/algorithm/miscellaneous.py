@@ -20,5 +20,5 @@ def ride_output_columns():
 
 def pairs_calculation_ride():
     return ['origin', 'destination', 't_travel', 't_req_int',
-            'distance', 'VoT', 'WtS', 'max_delay']
+            'distance', 'VoT', 'WtS', 'max_delay', 'u_ns', 'ASC_pool']
 

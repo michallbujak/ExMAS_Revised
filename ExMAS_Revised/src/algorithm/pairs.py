@@ -1,13 +1,13 @@
 """ Part of algorithm, where one calculates feasible pairs """
-import itertools
-
-import pandas as pd
 from logging import Logger
 import math
 from itertools import product
 
+import pandas as pd
+
 from utilities.general_utils import optional_log
-from algorithm.miscellaneous import pairs_calculation_ride
+from algorithm.miscellaneous import pairs_calculation_ride, ride_output_columns
+from algorithm.pooltype import PoolType
 
 
 def pair_pool(
@@ -21,14 +21,15 @@ def pair_pool(
     sizes['current'] = sizes['initial']
     sizes['prev_step'] = sizes['initial']
 
-    optional_log(10, "Calculating values for pairs ...", logger)
-    out = pd.DataFrame(index=pd.MultiIndex.from_product([requests['traveller_id']] * 2))
+    optional_log(20, "Calculating values for pairs ...", logger)
+
+    pairs = pd.DataFrame(index=pd.MultiIndex.from_product([requests['traveller_id']] * 2))
     cols = pairs_calculation_ride()
     for num, ij in enumerate(['_i', '_j']):
-        out[[c + ij for c in cols]] = requests.loc[[requests[c] for c in cols]]
-        out[ij] = out.index.get_level_values(num)
+        pairs[[c + ij for c in cols]] = requests.loc[[requests[c] for c in cols]]
+        pairs[ij] = pairs.index.get_level_values(num)
 
-    out = out[~out['i'] == out['j']]
+    pairs = pairs[~pairs['i'] == pairs['j']]
 
     # Reduce size of the skim (distances) matrix
     skim_indexes = set(requests['origin'].append(requests['destination']))
@@ -39,50 +40,163 @@ def pair_pool(
 
     # If user provides a planning horizon, conduct corresponding filtering
     if params.get('horizon', 0) > 0:
-        out = out[abs(out['t_since_t0_i'] - out['t_since_t0_j']) < params['horizon']]
-        sizes['current'] = 4 * len(out)
-        optional_log(20, f"Horizon criterion removed "
-                         f"{sizes['current'] - sizes['prev_step']}",
+        pairs = pairs[abs(pairs['t_since_t0_i'] - pairs['t_since_t0_j']) < params['horizon']]
+        sizes['current'] = 2 * len(pairs)
+        optional_log(0, f"Horizon criterion removed "
+                        f"{sizes['current'] - sizes['prev_step']}",
                      logger)
-        sizes['prev_step'] = 4 * len(out)
+        sizes['prev_step'] = 2 * len(pairs)
 
-    # Query based on travellers' acceptable time windows
+    # Query based on travellers' acceptable time windows (departure compatibility)
     query_prompt = '(t_req_int_j + max_delay_j >= t_req_int_i - max_delay_i) &' \
                    ' (t_req_int_j - max_delay_j <= (t_req_int_i + t_ns_i + max_delay_i))'
-    out = out.query(query_prompt)
+    pairs = pairs.query(query_prompt)
 
     # Calculate and filter for origin compatibility
-    out['t_oo'] = out.apply(lambda x: skim.loc[x['origin_i'], x['origin_j']], axis=1)
-    out['delay'] = out['t_req_int_i'] + out['t_oo'] + out['t_req_int_j']
-    out['delay_i'] = out.apply(
+    pairs['t_oo'] = pairs.apply(
+        lambda x: int(skim.loc[x['origin_i'], x['origin_j']] / params['speed']),
+        axis=1
+    )
+    query_prompt = '(t_req_int_i + t_oo + max_delay_i >= t_req_int_j - max_delay_j) &' \
+                   ' (t_req_int_i + t_oo - max_delay_i <= (t_req_int_j + max_delay_j))'
+    pairs = pairs.query(query_prompt)
+
+    sizes['current'] = 2 * len(pairs)
+    optional_log(0,
+                 f"Initial filtering reduced size from "
+                 f"{sizes['prev_step']} to {sizes['current']}",
+                 logger)
+    sizes['prev_step'] = sizes['current']
+
+    # Determine whether 2nd origin is reachable within accepted time
+    pairs['delay'] = pairs['t_req_int_i'] + pairs['t_oo'] + pairs['t_req_int_j']
+    pairs['delay_i'] = pairs.apply(
         lambda x: min(abs(x['delay'] / 2), x['max_delay_i'], x['max_delay_i']) *
                   (1 if x['delay'] < 0 else -1),
         axis=1
     )
 
     for ij in ['i', 'j']:
-        out = out[abs(out['delay_' + ij]) <= out['delta_' + ij] / params['delay_value']]
+        pairs = pairs[abs(pairs['delay_' + ij]) <= pairs['delta_' + ij] / params['delay_value']]
 
-    sizes['current'] = 4 * len(out)
-    optional_log(20, f"Origin compatibility filtered from {sizes['prev_step']}"
-                     f"to {sizes['current']}.", logger)
+    sizes['current'] = 2 * len(pairs)
+    optional_log(0, f"Origin compatibility filtered from {sizes['prev_step']}"
+                    f"to {sizes['current']}.", logger)
     sizes['prev_step'] = sizes['current']
 
     # Compute trip characteristics
-    out['t_ij'] = out.apply(lambda x: skim.loc[x['origin_j'], x['destination_i']], axis=1)
-    out['t_ji'] = out.apply(lambda x: skim.loc[x['origin_i'], x['destination_j']], axis=1)
-    out['t_dd'] = out.apply(lambda x: skim.loc[x['destination_i'], x['destination_j']], axis=1)
+    pairs['t_ij'] = pairs.apply(
+        lambda x: int(skim.loc[x['origin_j'], x['destination_i']] / params['speed']),
+        axis=1
+    )
+    pairs['t_ji'] = pairs.apply(
+        lambda x: int(skim.loc[x['origin_i'], x['destination_j']] / params['speed']),
+        axis=1
+    )
+    pairs['t_dd'] = pairs.apply(
+        lambda x: int(skim.loc[x['destination_i'], x['destination_j']] / params['speed']),
+        axis=1
+    )
 
-    for ij, fifo_lifo in product(['i', 'j'], ['fifo', 'lifo']):
+    optional_log(10, 'Travel times calculated', logger)
+
+    # Now check for utilities with FIFO and LIFO
+    for ij, fl in product(['i', 'j'], ['fifo', 'lifo']):
+        # First, calculate time
+        pairs['t_s_' + ij + '_' + fl] = pairs.apply(
+            travel_times,
+            i_j=ij,
+            fifo_lifo=fl,
+            axis=1
+        )
+        # Now proceed to utility
+        pairs['u_s_' + ij + '_' + fl] = pairs.apply(
+            utility_shared,
+            i_j=ij,
+            fifo_lifo=fl,
+            axis=1
+        )
+
+    optional_log(10, 'Utilities for pairs calculated', logger)
+
+    # Extract attractive FIFO and LIFO rides
+    for fl in ['fifo', 'lifo']:
+        pairs[fl + '_attractive'] = pairs.apply(
+            check_attractiveness,
+            fifo_lifo=fl,
+            axis=1
+        )
+
+    return pd.concat([extract_attractive(pairs, t, params) for t in ['fifo', 'lifo']])
 
 
-
-
+def travel_times(
+        ride_row: pd.Series,
+        i_j: str,
+        fifo_lifo: str
+):
+    """ Calculate travel times """
+    if i_j == 'i':
+        time = ride_row['t_oo']
+        if fifo_lifo == 'fifo':
+            return time + ride_row['t_ji']
+        return time + ride_row['t_ns_j'] + ride_row['t_dd']
+    else:
+        if fifo_lifo == 'fifo':
+            return ride_row['t_ji'] + ride_row['t_dd']
+        return ride_row['t_ns_j']
 
 
 def utility_shared(
         ride_row: pd.Series,
+        i_j: str,
         fifo_lifo: str,
         params: dict
 ):
-    ride_row = 0
+    """ Utility of a shared ride """
+    out = params['price'] * ride_row['distance'] / 1000 * (1 - params['share_discount'])
+    out += ride_row['VoT'] * (ride_row['t_s_' + i_j + '_' + fifo_lifo] * ride_row['WtS'])
+    out += ride_row['VoT'] * ride_row['delay_' + i_j] * \
+           ride_row['VoT'] * params.get('delay_value')
+    out += ride_row['ASC_pool_' + i_j]
+    return out
+
+
+def check_attractiveness(
+        ride_row: pd.Series,
+        fifo_lifo: str
+):
+    """ Check whether shared ride is more attractive in fifo/lifo """
+    return (ride_row['u_s_i_' + fifo_lifo] < ride_row['u_ns_i']) & \
+        (ride_row['u_s_j' + fifo_lifo] < ride_row['u_ns_j'])
+
+
+def extract_attractive(
+        rides: pd.DataFrame,
+        fifo_lifo: str,
+        parameters: dict
+):
+    """ Extract to desired output """
+    attractive = rides.loc[rides[fifo_lifo + '_attractive']]
+    out = pd.DataFrame(columns=ride_output_columns(), index=attractive.index)
+    out['ids'] = out.apply(lambda x: [x['i'], x['j']], axis=1)
+    out['u_traveller_individual'] = out.apply(
+        lambda x: [x['u_s_i_' + fifo_lifo], x['u_s_j_' + fifo_lifo]],
+        axis=1
+    )
+    out['u_traveller_total'] = out['u_traveller_individual'].apply(lambda x: sum(x))
+    out['veh_distance'] = out['t_travel'] * parameters['speed']
+    out['origin_order'] = out.apply(lambda x: [x['i'], x['j']], axis=1)
+    out['delays'] = out.apply(lambda x: [x['delay_i'], x['delay_j']], axis=1)
+    if fifo_lifo == 'fifo':
+        out['t_travel'] = out['t_oo'] + out['t_ij'] + out['t_dd']
+        out['destination_order'] = out.apply(lambda x: [x['i'], x['j']], axis=1)
+        out['kind'] = PoolType.FIFO2
+    else:
+        out['t_travel'] = out['t_oo'] + out['t_ns_j'] + out['t_dd']
+        out['destination_order'] = out.apply(lambda x: [x['j'], x['i']], axis=1)
+        out['kind'] = PoolType.LIFO2
+
+    return out
+
+
