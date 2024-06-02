@@ -98,6 +98,9 @@ def attractive_rides(
 
     optional_log(20, "Single rides computed", logger)
 
+    if parameters['max_degree'] == 1:
+        return feasible_rides
+
     # Proceed to rides of degree 2
     feasible_rides = pd.concat(
         [feasible_rides,
@@ -108,6 +111,15 @@ def attractive_rides(
              logger=logger
          )]
     )
+
+    optional_log(20, "Feasible Pairs computed", logger)
+
+    if parameters['max_degree'] == 2:
+        return feasible_rides
+
+    current_degree = 2
+    while current_degree < parameters['max_degree']:
+        potential_extension = 0
 
 
     return feasible_rides

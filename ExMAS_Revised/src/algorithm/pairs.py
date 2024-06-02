@@ -5,6 +5,7 @@ from itertools import product
 
 import pandas as pd
 
+from algorithm.utility_functions import utility_pairs
 from utilities.general_utils import optional_log
 from algorithm.miscellaneous import pairs_calculation_ride, ride_output_columns
 from algorithm.pooltype import PoolType
@@ -111,7 +112,7 @@ def pair_pool(
         )
         # Now proceed to utility
         pairs['u_s_' + ij + '_' + fl] = pairs.apply(
-            utility_shared,
+            utility_pairs,
             i_j=ij,
             fifo_lifo=fl,
             axis=1
@@ -145,21 +146,6 @@ def travel_times(
         if fifo_lifo == 'fifo':
             return ride_row['t_ji'] + ride_row['t_dd']
         return ride_row['t_ns_j']
-
-
-def utility_shared(
-        ride_row: pd.Series,
-        i_j: str,
-        fifo_lifo: str,
-        params: dict
-):
-    """ Utility of a shared ride """
-    out = params['price'] * ride_row['distance'] / 1000 * (1 - params['share_discount'])
-    out += ride_row['VoT'] * (ride_row['t_s_' + i_j + '_' + fifo_lifo] * ride_row['WtS'])
-    out += ride_row['VoT'] * ride_row['delay_' + i_j] * \
-           ride_row['VoT'] * params.get('delay_value')
-    out += ride_row['ASC_pool_' + i_j]
-    return out
 
 
 def check_attractiveness(
