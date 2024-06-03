@@ -1,8 +1,10 @@
 """ Search for feasible extensions """
-from itertools import combinations
+from itertools import combinations, product
 from logging import Logger
 
 import pandas as pd
+
+from utilities.general_utils import optional_log
 
 
 def extend_feasible_rides(
@@ -47,7 +49,10 @@ def extend_feasible_rides(
 
     cur_rides = feasible_rides.loc[is_max_degree].copy()
 
-    cur_combinations = feasible_rides['indexes'].to_list()
+    optional_log(20, f'Initial number of rides of degree {current_degree}'
+                     f'is {len(cur_rides)}', logger)
+
+    all_combinations = cur_rides['indexes'].to_list()
 
     # Check for each ride whether it is extendable
     # Based on shareability structures, example
@@ -59,25 +64,99 @@ def extend_feasible_rides(
             return False
         return sum([t in comb2 for t in comb1]) == deg
 
-    extension_combinations = []
+    ext_trav_from_ride = {}
 
-    for cur_combination in cur_combinations:
-        overlap_list = [c for c in cur_combination if
-                        overlap_func(cur_combination, c, current_degree-1)]
+    for cur_comb in all_combinations:
+        overlap_list = [c for c in cur_comb if
+                        overlap_func(cur_comb, c, current_degree - 1)]
         # If we want a ride of degree n+1, we need (n+1 choose n) = n+1
         # combinations to be feasible. Hence, apart from the one in loop
         # we need additional n. There might be k different extensions
-        # to consider, hence k*(n+1 choose n)
+        # to consider, hence k*(n+1 choose n) (separately order
+        # of origins and destinations)
         if len(overlap_list) < current_degree:
+            ext_trav_from_ride[cur_comb] = False
             continue
+
+        ext_trav_from_ride[cur_comb] = []
+
         for overlapping in overlap_list:
-            new = list(set(cur_combination + overlapping))
-            if new in extension_combinations:
-                continue
-            else:
-                extension_combinations.append(new)
+            new = set(cur_comb + overlapping).difference(set(cur_comb))
+            if not new | new in ext_trav_from_ride[cur_comb]:
+                ext_trav_from_ride[cur_comb].append(new)
 
-    # Now we have combinations of travellers, but we need to consider
-    # different origin and destination orders.
+    if not ext_trav_from_ride:
+        return pd.DataFrame(), False
+
+    # Filter for the rides, where the order is proper,
+    # i.e. the rides must hold the same order of origins
+    # and destinations. If there is no overlap in the order,
+    # the combination will not be feasible
+    cur_rides = cur_rides.loc[
+        cur_rides.apply(lambda x: x['indexes'] in ext_trav_from_ride.keys(), axis=1)
+    ]
+
+    extensions = []
+    browsed = []
+
+    origin_combs_all = cur_rides['origin_order'].to_list()
+    destination_combs_all = cur_rides['destination_order'].to_list()
+
+    # There might be different destinations sequences feasible for
+    # each origin combinations
+    orig_dest = {}
+    for orig, dest in zip(origin_combs_all, destination_combs_all):
+        if orig in orig_dest.keys():
+            orig_dest[orig].append(dest)
+        else:
+            orig_dest[orig] = [dest]
+
+    # todo
+
+    # for ride in cur_rides:
+    #     for extension in ext_trav_from_ride[ride['indexes']]:
+    #         for orig_no, dest_no in product(range(current_degree + 1),
+    #                                         range(current_degree + 1)):
+    #             origins = ride['origin_order'].copy()
+    #             origins.insert(orig_no, extension)
+    #             destinations = ride['destination_order'].copy()
+    #             destinations.insert(dest_no, extension)
+    #
+    #             if (origins, destinations) in browsed:
+    #                 continue
+    #
+    #             for comb_origins in combinations(origins, current_degree):
+    #                 if not comb_origins in origin_combs_all:
+    #                     flag_ok = False
+    #                     break
+    #                 dest_temp = destinations.copy()
+    #                 dest_temp.pop(set(dest_temp).difference(set(comb_origins)))
+    #                 if dest_temp in orig_dest[comb_origins]:
+    #                     flag_ok = True
+    #                 else:
+    #                     flag_ok = False
+    #                     break
+    #             if flag_ok:
+    #                 browsed.append((origins, destinations))
+    #                 extensions.append((origins, destinations))
+    #             else:
+    #                 browsed.append((origins, destinations))
 
 
+
+
+                # if (all(t in all_combinations for t in combinations(comb, current_degree))) \
+                #         & (not comb in extensions):
+                #     extensions.append(comb.copy())
+
+    optional_log(20, f'Number of feasible extensions of degree {current_degree}'
+                     f' is {len(extensions)}', logger)
+
+    if not extensions:
+        return pd.DataFrame(), False
+
+    # Check for utility, first assuming 0 delay
+    for extensions in extensions:
+        ind_dist = {
+            t: ... #todo
+        }
