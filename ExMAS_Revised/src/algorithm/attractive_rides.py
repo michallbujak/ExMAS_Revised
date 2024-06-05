@@ -71,7 +71,7 @@ def attractive_rides(
     # Compute basic characteristics for the private rides
     requests['t_ns'] = requests['distance'].apply(lambda x: int(x / parameters["speed"]))
     requests['u_ns'] = requests.apply(
-        lambda x: parameters['price'] * x['distance'] / 1000 + x['VoT'] * x['t_ns'],
+        lambda x: -parameters['price'] * x['distance'] / 1000 + x['VoT'] * x['t_ns'],
         axis=1
     )
 

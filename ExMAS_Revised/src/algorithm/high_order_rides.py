@@ -4,7 +4,8 @@ from logging import Logger
 
 import pandas as pd
 
-from utilities.general_utils import optional_log
+from utilities.general_utils import optional_log, calculate_distance
+from utility_functions import utility_shared
 
 
 def extend_feasible_rides(
@@ -111,43 +112,34 @@ def extend_feasible_rides(
         else:
             orig_dest[orig] = [dest]
 
-    # todo
+    for ride in cur_rides:
+        for extension in ext_trav_from_ride[ride['indexes']]:
+            for orig_no, dest_no in product(range(current_degree + 1),
+                                            range(current_degree + 1)):
+                origins = ride['origin_order'].copy()
+                origins.insert(orig_no, extension)
+                destinations = ride['destination_order'].copy()
+                destinations.insert(dest_no, extension)
 
-    # for ride in cur_rides:
-    #     for extension in ext_trav_from_ride[ride['indexes']]:
-    #         for orig_no, dest_no in product(range(current_degree + 1),
-    #                                         range(current_degree + 1)):
-    #             origins = ride['origin_order'].copy()
-    #             origins.insert(orig_no, extension)
-    #             destinations = ride['destination_order'].copy()
-    #             destinations.insert(dest_no, extension)
-    #
-    #             if (origins, destinations) in browsed:
-    #                 continue
-    #
-    #             for comb_origins in combinations(origins, current_degree):
-    #                 if not comb_origins in origin_combs_all:
-    #                     flag_ok = False
-    #                     break
-    #                 dest_temp = destinations.copy()
-    #                 dest_temp.pop(set(dest_temp).difference(set(comb_origins)))
-    #                 if dest_temp in orig_dest[comb_origins]:
-    #                     flag_ok = True
-    #                 else:
-    #                     flag_ok = False
-    #                     break
-    #             if flag_ok:
-    #                 browsed.append((origins, destinations))
-    #                 extensions.append((origins, destinations))
-    #             else:
-    #                 browsed.append((origins, destinations))
+                if (origins, destinations) in browsed:
+                    continue
 
-
-
-
-                # if (all(t in all_combinations for t in combinations(comb, current_degree))) \
-                #         & (not comb in extensions):
-                #     extensions.append(comb.copy())
+                for comb_origins in combinations(origins, current_degree):
+                    if not comb_origins in origin_combs_all:
+                        flag_ok = False
+                        break
+                    dest_temp = destinations.copy()
+                    dest_temp.pop(set(dest_temp).difference(set(comb_origins)))
+                    if dest_temp in orig_dest[comb_origins]:
+                        flag_ok = True
+                    else:
+                        flag_ok = False
+                        break
+                if flag_ok:
+                    browsed.append((origins, destinations))
+                    extensions.append((origins, destinations))
+                else:
+                    browsed.append((origins, destinations))
 
     optional_log(20, f'Number of feasible extensions of degree {current_degree}'
                      f' is {len(extensions)}', logger)
@@ -156,7 +148,39 @@ def extend_feasible_rides(
         return pd.DataFrame(), False
 
     # Check for utility, first assuming 0 delay
-    for extensions in extensions:
-        ind_dist = {
-            t: ... #todo
+    for extension in extensions:
+        private_chars = {
+            t: {
+                char: requests.loc[t, char]
+                for char in ['distance', 'VoT', 'WtS', 'u_ns', 'ASC_pool']
+            } for t in extension[0],
         }
+        ind_dist = {
+            t: calculate_distance(skim=skim_matrix,
+                                  list_points=extension[0][extension[0].index(t):] +
+                                  extension[1][:(1+extension[1].index(t))]
+                                  )
+            for t in extension[0]
+        }
+
+        # First if no delay
+        shared_utilities = {
+            t: utility_shared(
+                distance=ind_dist[t]['distance'],
+                vot=private_chars[t]['VoT'],
+                wts=private_chars[t]['WtS'],
+                price=params['price'],
+                discount=params['share_discount'],
+                delay=0,
+                delay_value=params['delay_value'],
+                asc_pool=private_chars[t]['ASC_pool'],
+                avg_speed=params['speed']
+            ) for t in extension[0]
+        }
+
+        if any([shared_utilities[key] < private_chars[key]['u_ns']
+                for key in private_chars.keys()]):
+            continue
+
+
+
