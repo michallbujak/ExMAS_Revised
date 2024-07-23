@@ -124,8 +124,10 @@ def extend_feasible_rides(
                 if (origins, destinations) in browsed:
                     continue
 
+                flag_ok = False
+
                 for comb_origins in combinations(origins, current_degree):
-                    if not comb_origins in origin_combs_all:
+                    if comb_origins not in origin_combs_all:
                         flag_ok = False
                         break
                     dest_temp = destinations.copy()
@@ -158,7 +160,7 @@ def extend_feasible_rides(
         ind_dist = {
             t: calculate_distance(skim=skim_matrix,
                                   list_points=extension[0][extension[0].index(t):] +
-                                  extension[1][:(1+extension[1].index(t))]
+                                              extension[1][:(1 + extension[1].index(t))]
                                   )
             for t in extension[0]
         }
@@ -181,6 +183,3 @@ def extend_feasible_rides(
         if any([shared_utilities[key] < private_chars[key]['u_ns']
                 for key in private_chars.keys()]):
             continue
-
-
-
