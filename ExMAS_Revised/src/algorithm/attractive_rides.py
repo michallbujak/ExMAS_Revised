@@ -3,10 +3,10 @@ from logging import Logger
 
 import pandas as pd
 
-from algorithm.miscellaneous import maximum_delay, ride_output_columns
-from algorithm.singles import single_rides
+from algorithm.feasibility_utils.miscellaneous import maximum_delay, ride_output_columns
+from algorithm.feasibility_utils.singles import single_rides
 from utilities.general_utils import optional_log
-from algorithm.pairs import pair_pool
+from algorithm.feasibility_utils.pairs import pair_pool
 
 
 def attractive_rides(

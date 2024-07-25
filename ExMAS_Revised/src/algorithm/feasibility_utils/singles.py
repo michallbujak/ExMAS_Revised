@@ -1,6 +1,6 @@
 import pandas as pd
 
-from algorithm.pooltype import PoolType
+from algorithm.feasibility_utils.pooltype import PoolType
 
 
 def single_rides(

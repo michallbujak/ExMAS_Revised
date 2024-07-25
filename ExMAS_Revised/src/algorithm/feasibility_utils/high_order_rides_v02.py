@@ -7,8 +7,8 @@ import pandas as pd
 import numpy as np
 
 from utilities.general_utils import optional_log, calculate_distance
-from utility_functions import utility_shared
-from algorithm.miscellaneous import ride_output_columns
+from algorithm.feasibility_utils.utility_functions import utility_shared
+from algorithm.feasibility_utils.miscellaneous import ride_output_columns
 
 
 def extend_feasible_rides(

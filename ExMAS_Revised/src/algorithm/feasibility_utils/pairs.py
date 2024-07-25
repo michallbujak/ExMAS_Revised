@@ -5,10 +5,10 @@ from itertools import product
 
 import pandas as pd
 
-from algorithm.utility_functions import utility_pairs
+from algorithm.feasibility_utils.utility_functions import utility_pairs
 from utilities.general_utils import optional_log
-from algorithm.miscellaneous import pairs_calculation_ride, ride_output_columns
-from algorithm.pooltype import PoolType
+from algorithm.feasibility_utils.miscellaneous import pairs_calculation_ride, ride_output_columns
+from algorithm.feasibility_utils.pooltype import PoolType
 
 
 def pair_pool(
