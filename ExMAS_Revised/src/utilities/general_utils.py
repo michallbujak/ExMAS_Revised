@@ -1,6 +1,7 @@
 """ General purpose functions """
 
 import logging
+import os
 
 import pandas as pd
 
@@ -16,6 +17,24 @@ def optional_log(
         pass
     else:
         logger.log(level, msg)
+
+
+def create_folder(
+        path: str,
+        logger: logging.Logger or None = None
+) -> None:
+    """
+    Designed to create a folder under given path
+    :param path: a path to create a folder
+    :param logger: logging purposes
+    :return:
+    """
+    try:
+        os.mkdir(path)
+    except OSError:
+        pass
+    else:
+        optional_log(30, f'Creating folder at {path}', logger)
 
 
 def calculate_distance(
