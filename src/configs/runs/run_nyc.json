@@ -1,0 +1,6 @@
+{
+	"nested": true,
+	"behaviour": "configs/behaviour/mariagonzalez100.json",
+	"city": "configs/city/nyc.json",
+	"requests": "data/nyc/nyc_first_150.csv"
+}
