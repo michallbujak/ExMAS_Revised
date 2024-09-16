@@ -24,16 +24,21 @@ def pair_pool(
 
     optional_log(20, "Calculating values for pairs ...", logger)
 
-    pairs = pd.DataFrame(index=pd.MultiIndex.from_product([requests['traveller_id']] * 2))
     cols = pairs_calculation_ride()
-    for num, ij in enumerate(['_i', '_j']):
-        pairs[[c + ij for c in cols]] = requests.loc[[requests[c] for c in cols]]
-        pairs[ij] = pairs.index.get_level_values(num)
+    pairs = pd.DataFrame(
+        index=pd.MultiIndex.from_product([requests['traveller_id']] * 2)
+    )
 
-    pairs = pairs[~pairs['i'] == pairs['j']]
+    pairs[[col + "_i" for col in cols]] = requests.loc[pairs.index.get_level_values(0)][cols].set_index(pairs.index)  # assign columns
+    pairs[[col + "_j" for col in cols]] = requests.loc[pairs.index.get_level_values(1)][cols].set_index(pairs.index)
+
+    pairs['i'] = pairs.index.get_level_values(0)
+    pairs['j'] = pairs.index.get_level_values(1)
+
+    pairs = pairs.loc[pairs['i'] != pairs['j']]
 
     # Reduce size of the skim (distances) matrix
-    skim_indexes = set(requests['origin'].append(requests['destination']))
+    skim_indexes = list(set(list(requests['origin']) + list(requests['destination'])))
     skim = skim_matrix.loc[skim_indexes, skim_indexes].copy()
 
     # Convert distances to travel time
@@ -41,7 +46,7 @@ def pair_pool(
 
     # If user provides a planning horizon, conduct corresponding filtering
     if params.get('horizon', 0) > 0:
-        pairs = pairs[abs(pairs['t_since_t0_i'] - pairs['t_since_t0_j']) < params['horizon']]
+        pairs = pairs[abs(pairs['t_req_int_i'] - pairs['t_req_int_j']) < params['horizon']]
         sizes['current'] = 2 * len(pairs)
         optional_log(0, f"Horizon criterion removed "
                         f"{sizes['current'] - sizes['prev_step']}",
@@ -49,18 +54,21 @@ def pair_pool(
         sizes['prev_step'] = 2 * len(pairs)
 
     # Query based on travellers' acceptable time windows (departure compatibility)
-    query_prompt = '(t_req_int_j + max_delay_j >= t_req_int_i - max_delay_i) &' \
-                   ' (t_req_int_j - max_delay_j <= (t_req_int_i + t_ns_i + max_delay_i))'
-    pairs = pairs.query(query_prompt)
+    pairs = pairs.loc[(pairs['t_req_int_j'] + pairs['max_delay_j'] >=
+                       pairs['t_req_int_i'] - pairs['max_delay_i']) &
+                      (pairs['t_req_int_j'] - pairs['max_delay_j'] <=
+                       pairs['t_req_int_i'] + pairs['t_ns_i'] + pairs['max_delay_i'])]
 
     # Calculate and filter for origin compatibility
     pairs['t_oo'] = pairs.apply(
         lambda x: int(skim.loc[x['origin_i'], x['origin_j']] / params['speed']),
         axis=1
     )
-    query_prompt = '(t_req_int_i + t_oo + max_delay_i >= t_req_int_j - max_delay_j) &' \
-                   ' (t_req_int_i + t_oo - max_delay_i <= (t_req_int_j + max_delay_j))'
-    pairs = pairs.query(query_prompt)
+
+    pairs = pairs.loc[(pairs['t_req_int_i'] + pairs['t_oo'] + pairs['max_delay_i'] >=
+                       pairs['t_req_int_j'] - pairs['max_delay_j']) &
+                      (pairs['t_req_int_i'] + pairs['t_oo'] - pairs['max_delay_i'] <=
+                       pairs['t_req_int_j'] + pairs['max_delay_j'])]
 
     sizes['current'] = 2 * len(pairs)
     optional_log(0,
@@ -76,9 +84,10 @@ def pair_pool(
                   (1 if x['delay'] < 0 else -1),
         axis=1
     )
+    pairs['delay_j'] = pairs.delay + pairs.delay_i
 
     for ij in ['i', 'j']:
-        pairs = pairs[abs(pairs['delay_' + ij]) <= pairs['delta_' + ij] / params['delay_value']]
+        pairs = pairs[abs(pairs['delay_' + ij]) <= pairs['max_delay_' + ij] / params['delay_value']]
 
     sizes['current'] = 2 * len(pairs)
     optional_log(0, f"Origin compatibility filtered from {sizes['prev_step']}"

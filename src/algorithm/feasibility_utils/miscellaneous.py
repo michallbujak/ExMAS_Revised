@@ -9,7 +9,7 @@ def maximum_delay(
     return list(map(lambda x: x if x >= 0 else 0,
                     (1 / requests['WtS'] - 1) * requests['t_ns'] +
                     (parameters['price'] * parameters['share_discount'] *
-                     requests.dist / 1000) / (requests.VoT * requests.WtS)))
+                     requests['distance'] / 1000) / (requests['VoT'] * requests['WtS'])))
 
 
 def ride_output_columns():
@@ -19,6 +19,6 @@ def ride_output_columns():
 
 
 def pairs_calculation_ride():
-    return ['origin', 'destination', 't_travel', 't_req_int',
+    return ['origin', 'destination', 't_ns', 't_req_int',
             'distance', 'VoT', 'WtS', 'max_delay', 'u_ns', 'ASC_pool']
 

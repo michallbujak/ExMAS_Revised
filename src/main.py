@@ -1,7 +1,7 @@
 """ Main script for calling the ExMAS_Revised loop """
-
 import utilities.preprocessing
 from utilities.general_utils import initialise_logger
+from algorithm.attractive_rides import attractive_rides
 
 
 def exmas_revised(
@@ -17,8 +17,12 @@ def exmas_revised(
         config=configuration, logger=main_logger)
     demand = utilities.preprocessing.load_demand(
         configuration['requests'], config=configuration, logger=main_logger)
-
-    x = 0
+    shareability = attractive_rides(
+        requests=demand,
+        skim_matrix=skim_matrix,
+        parameters=configuration,
+        logger=main_logger
+    )
 
     return {}
 

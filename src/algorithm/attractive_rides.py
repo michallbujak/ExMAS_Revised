@@ -62,8 +62,9 @@ def attractive_rides(
         lambda x: skim_matrix.loc[x['origin'], x['destination']],
         axis=1
     )
+    requests['request_time'] = requests['request_time'].apply(pd.to_datetime, format='%Y-%m-%d %H:%M:%S')
     requests['t_req_int'] = requests.apply(
-        lambda x: x['request_time'] - min(requests['request_time']),
+        lambda x: (x['request_time'] - min(requests['request_time'])).seconds,
         axis=1
     )
     requests.sort_values('t_req_int', inplace=True)

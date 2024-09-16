@@ -2,5 +2,10 @@
 	"nested": true,
 	"behaviour": "configs/behaviour/mariagonzalez100.json",
 	"city": "configs/city/nyc.json",
-	"requests": "data/nyc/nyc_first_150.csv"
+	"requests": "data/nyc/nyc_first_149.csv",
+	"speed": 6,
+	"share_discount": 0.3,
+	"price": 0.0015,
+	"horizon": 1200,
+	"max_degree": 4
 }

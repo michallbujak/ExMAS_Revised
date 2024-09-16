@@ -1,8 +1,7 @@
 {
 	"paths": {
 		"city_graph": "data/graphs/Manhattan.graphml",
-		"skim_matrix": "data/graphs/Manhattan.csv",
-		"demand": "data/nyc_first_150.csv"
+		"skim_matrix": "data/graphs/Manhattan.csv"
 	},
 	"city": "Manhattan, New York County, New York, United States",
 	"dist_threshold": 10000
